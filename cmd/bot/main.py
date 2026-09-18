@@ -18,3 +18,5 @@ if __name__ == "__main__":
     
     auth = AuthServices(client)
     auth.login()
+    auth.getAccountdetails()
+    auth.setVehicles()
