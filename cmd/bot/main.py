@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from internal.models.account import Account
 from internal.client.client import Client
 from internal.site.paybyphone.auth import AuthServices
-
+from internal.site.paybyphone.parkingZone import ParkingZone
+from internal.site.paybyphone.parkingOptimizer import ParkingOptimizer
 
 if __name__ == "__main__":
     load_dotenv()
@@ -18,5 +19,12 @@ if __name__ == "__main__":
     
     auth = AuthServices(client)
     auth.login()
-    auth.getAccountdetails()
-    auth.setVehicles()
+    auth.checkAccountdetails()
+    auth.checkVehicles()
+    
+     
+    parkingZone = ParkingZone(client,'94802')
+    parkingOptimizer = ParkingOptimizer(step_minutes=15,parkingZone=parkingZone)
+    
+    parkingOptimizer.fetch_tariffs()
+    print(parkingOptimizer.optimize("14:00", "17:30"))
