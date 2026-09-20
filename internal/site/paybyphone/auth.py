@@ -1,6 +1,7 @@
 from internal.client.client import Client
 from internal.models.vehicle import Vehicle
 from internal.models.account import Account
+from internal.models.card import Card
 
 import json
 
@@ -144,5 +145,52 @@ class AuthServices():
         print(self.client.account.vehiclesList)
         
         
+    def checkPayement(self):
+        url = "https://consumer.paybyphoneapis.com/uapi/graphql"
+
+        payload = json.dumps({
+        "operationName": None,
+        "variables": {
+            "input": {
+            "mandateCountryCode": "FR"
+            }
+        },
+        "query": "query GetPaymentAccountsV1($input: GetPaymentAccountsInput!) {\n  getPaymentAccountsV1(input: $input) {\n    paymentCards {\n      cardType\n      maskedCardNumber\n      accountType\n      paymentAccountId\n      paymentScope\n      corporateClientId\n      expiryMonth\n      expiryYear\n      __typename\n    }\n    mno {\n      status\n      operator\n      phoneNumber\n      paymentAccountId\n      paymentScope\n      corporateClientId\n      expiryMonth\n      expiryYear\n      __typename\n    }\n    twintAccounts {\n      accountType\n      paymentAccountId\n      paymentScope\n      mandates {\n        id\n        status\n        __typename\n      }\n      __typename\n    }\n    paypalAccounts {\n      accountType\n      paymentAccountId\n      paymentScope\n      mandates {\n        id\n        status\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
+        })
+        headers = {
+        'accept': '*/*',
+        'accept-language': 'fr-FR,fr;q=0.9',
+        'authorization': f'Bearer {self.client.accessToken}',
+        'cache-control': 'no-cache',
+        'content-type': 'application/json',
+        'origin': 'https://m.paybyphone.com',
+        'pragma': 'no-cache',
+        'priority': 'u=1, i',
+        'referer': 'https://m.paybyphone.com/',
+        'sec-ch-ua': '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'cross-site',
+        'sec-gpc': '1'
+        }
         
-    
+        r = self.client.post(url,headers=headers,payload=payload)
+        data = r.json()
+            
+        if not data or not "data" in data or not "getPaymentAccountsV1" in data["data"] or len(data["data"]["getPaymentAccountsV1"])==0:
+            raise(ValueError("Error getting payements details make sure your cards are registered"))
+        
+        simplerData = data["data"]["getPaymentAccountsV1"]
+        
+        cards = []
+        
+        for card in simplerData["paymentCards"]:
+            newCard = Card(card['maskedCardNumber'],card['cardType'],card['paymentAccountId'])
+            
+            cards.append(newCard)
+            
+        self.client.account.cardsList = cards
+        
+        print(self.client.account.cardsList)

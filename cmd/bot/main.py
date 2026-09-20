@@ -21,10 +21,11 @@ if __name__ == "__main__":
     auth.login()
     auth.checkAccountdetails()
     auth.checkVehicles()
-    
+    auth.checkPayement()
+    print(client.accessToken)    
      
-    parkingZone = ParkingZone(client,'94802')
-    parkingOptimizer = ParkingOptimizer(step_minutes=15,parkingZone=parkingZone)
+    # parkingZone = ParkingZone(client,'94802')
+    # parkingOptimizer = ParkingOptimizer(step_minutes=15,parkingZone=parkingZone)
     
-    parkingOptimizer.fetch_tariffs()
-    print(parkingOptimizer.optimize("14:00", "17:30"))
+    # parkingOptimizer.fetch_tariffs()
+    # print(parkingOptimizer.optimize("14:00", "17:30"))
