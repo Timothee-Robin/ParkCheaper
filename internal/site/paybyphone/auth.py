@@ -44,7 +44,8 @@ class AuthServices():
             self.client.refreshToken = data["refresh_token"]
         
         elif data and "error" in data:
-           raise ValueError(f"Error : {data["error_description"]}") 
+            error_desc = data.get("error_description", data.get("error"))
+            raise ValueError(f"Error : {error_desc}") 
         
         else:
             raise ValueError("Error login in")
@@ -194,3 +195,7 @@ class AuthServices():
         self.client.account.cardsList = cards
         
         print(self.client.account.cardsList)
+
+    # Aliases pour la cohérence des noms de méthodes
+    checkPayment = checkPayement
+    checkAccountDetails = checkAccountdetails

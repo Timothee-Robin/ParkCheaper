@@ -20,30 +20,30 @@ class Client():
         
         
         
-    def get(self,url,headers=None):
+    def get(self, url, headers=None):
+        r = self.session.get(url, headers=headers)
         
-        r = self.session.get(url,headers)
-        
-        if r.status_code ==403:
-            raise(ValueError("Error 403 Blocked"))
+        if r.status_code == 403:
+            raise ValueError("Error 403 Blocked")
 
         return r
         
-    def post(self,url,headers=None,payload=None,json=None):
-            
-        r = self.session.post(url,headers=headers,data=payload,json=json)
+    def post(self, url, headers=None, payload=None, json=None):
+        r = self.session.post(url, headers=headers, data=payload, json=json)
         
-        if r.status_code==401 and url != "https://auth.paybyphoneapis.com/consumer/token":
+        if r.status_code == 401 and url != "https://auth.paybyphoneapis.com/consumer/token":
             print("Error : Account not logged in refreshing...")
-            self.refreshToken()
-            self.post(url,headers=headers,payload=payload)
+            self.refreshAccessToken()
+            new_headers = dict(headers) if headers else {}
+            new_headers["authorization"] = f"Bearer {self.accessToken}"
+            return self.post(url, headers=new_headers, payload=payload, json=json)
         
-        if r.status_code ==403:
-            raise(ValueError("Error 403 Blocked"))
+        if r.status_code == 403:
+            raise ValueError("Error 403 Blocked")
         
         return r
     
-    def refreshToken(self):
+    def refreshAccessToken(self):
         url = "https://auth.paybyphoneapis.com/consumer/token"
 
         payload = f'grant_type=refresh_token&refresh_token={self.refreshToken}&client_id=paybyphone_web'
@@ -66,14 +66,14 @@ class Client():
         'x-pbp-clienttype': 'WebApp'
         }
 
-        r = self.post(url,headers=headers,payload=payload)
+        r = self.post(url, headers=headers, payload=payload)
         data = r.json()
         if data and "access_token" in data:
             self.accessToken = data["access_token"]
             self.refreshToken = data["refresh_token"]
         
         elif data and "error" in data:
-            raise ValueError(f"Error refreshing Token: {data["error_description"]}") 
+            raise ValueError(f"Error refreshing Token: {data.get('error_description', data.get('error'))}") 
         else:
             raise ValueError("Error refreshing Token")
     

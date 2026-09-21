@@ -10,9 +10,14 @@ class CheckoutClient:
     def __init__(self, client: Client, ticketList: list[int], parkingZone: ParkingZone):
         self.client = client
         self.ticketList = ticketList  # Ex: [30, 60, 60]
+        if not self.client.account.vehiclesList:
+            raise ValueError("Aucun véhicule trouvé sur le compte. Assurez-vous d'avoir appelé auth.checkVehicles().")
+        if not self.client.account.cardsList:
+            raise ValueError("Aucune carte trouvée sur le compte. Assurez-vous d'avoir appelé auth.checkPayement().")
         self.licensePlate = self.client.account.vehiclesList[0].licensePlate
         self.payment = self.client.account.cardsList[0]
         self.parkingZone = parkingZone
+        self.zone = self.parkingZone.zone
         
         
     def _get_headers(self) -> dict:
@@ -33,20 +38,37 @@ class CheckoutClient:
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "cross-site",
             "sec-gpc": "1",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
         }
+
+
 
     def checkoutTicket(self, duration_minutes: int) -> dict:
         """Déclenche la mutation d'achat/paiement réel du ticket sur PayByPhone."""
-        # TODO: Remplir avec la mutation GraphQL de paiement réel (ex: CompletePaymentSession / StartParkingSession)
-        print(
-            f"[+] Achat en cours pour {duration_minutes} min sur zone {self.parkingZone.zone}..."
+        print(f"[+] Achat en cours pour {duration_minutes} min sur zone {self.zone}...")
+        quote = self.createQuoteWithCard(duration_minutes)
+        startParking = self.startParking(quote['quoteId'])
+        job = self.create3DS(
+            parkingSessionId=startParking["parkingSessionId"],
+            endingTime=startParking["endingTime"],
+            amount=startParking["amount"],
+            parkingSegmentId=startParking["parkingSegmentId"]
         )
-        return {}
+        status = self.check3DS(jobId=job)
+        return {
+            "status": status,
+            "jobId": job,
+            "quote": quote,
+            "startParking": startParking
+        }
+
+
 
     def checkParkingSession(self) -> dict:
         """Récupère la session active et renvoie son expireTime en timestamp UTC."""
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
+        
         payload = json.dumps(
             {
                 "operationName": None,
@@ -85,7 +107,7 @@ class CheckoutClient:
         matching_session = None
         for s in sessions:
             zone_match = (
-                s.get("location", {}).get("advertisedLocationId") == self.zone
+                str(s.get("location", {}).get("advertisedLocationId")) == str(self.zone)
             )
             plate_match = (
                 s.get("vehicle", {}).get("licensePlate") == self.licensePlate
@@ -110,6 +132,8 @@ class CheckoutClient:
                 expire_dt - datetime.now(timezone.utc)
             ).total_seconds(),
         }
+
+
 
     def scheduleTickets(self) -> None:
         """Ordonnance et enchaîne séquentiellement la liste de tickets."""
@@ -143,231 +167,211 @@ class CheckoutClient:
 
         print("\n[+] Tous les tickets programmés ont été consommés avec succès.")
         
+      
+      
         
-    def createQuoteWithCard(self,duration):
-        
+    def createQuoteWithCard(self, duration: int) -> dict:
+        if not self.parkingZone.ratePolicyId:
+            self.parkingZone.getRestrictionOnZone()
+
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
         payload = json.dumps({
-        "operationName": None,
-        "variables": {
-            "requests": [
-            {
-                "quoteRequestId": str(uuid.uuid4()),
-                "product": "PARKING",
-                "details": {
-                "locationId": self.parkingZone.zone,
-                "advertisedLocationId": self.parkingZone.zone,
-                "ratePolicyId": self.parkingZone.ratePolicyId,
-                "parkingQuoteOperation": "Start",
-                "durationTimeUnit": "Minutes",
-                "durationQuantity": duration,
-                "licensePlate": self.licensePlate,
-                "stall": "",
-                "paymentAccountId": self.payment.paymentAccountId,
-                "paymentCardType": self.payment.cardType,
-                "paymentScope": "Private"
-                }
-            }
-            ]
-        },
-        "query": "mutation CreateQuotesV1($requests: [QuoteRequestInput!]!) {\n  createQuotesV1(input: {requests: $requests}) {\n    createQuotesResponse {\n      totalCost {\n        amount\n        currency\n        __typename\n      }\n      quotes {\n        quoteId\n        quoteRequestId\n        cost {\n          amount\n          currency\n          __typename\n        }\n        details {\n          quoteId\n          locationId\n          stall\n          quoteDate\n          parkingStartTime\n          parkingExpiryTime\n          parkingDurationAdjustment\n          licensePlate\n          corporateAccountSmsOverride\n          corporateAccountSmsConfirmationOverride\n          corporateAccountSmsReminderOverride\n          promotionApplied {\n            id\n            cost {\n              amount\n              currency\n              __typename\n            }\n            duration {\n              quantity\n              timeUnit\n              __typename\n            }\n            displayName\n            usage\n            isSelectedByUser\n            isTimeSplit\n            isExternal\n            configuredDuration {\n              quantity\n              timeUnit\n              __typename\n            }\n            minimumIncrement {\n              quantity\n              timeUnit\n              __typename\n            }\n            __typename\n          }\n          totalCost {\n            amount\n            currency\n            __typename\n          }\n          quoteItems {\n            quoteItemType\n            name\n            costAmount {\n              amount\n              currency\n              __typename\n            }\n            subQuoteItems {\n              quoteItemType\n              name\n              costAmount {\n                amount\n                currency\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        product\n        __typename\n      }\n      quoteErrors {\n        quoteRequestId\n        product\n        status\n        reason\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
+            "operationName": None,
+            "variables": {
+                "requests": [
+                    {
+                        "quoteRequestId": str(uuid.uuid4()),
+                        "product": "PARKING",
+                        "details": {
+                            "locationId": str(self.parkingZone.zone),
+                            "advertisedLocationId": str(self.parkingZone.zone),
+                            "ratePolicyId": str(self.parkingZone.ratePolicyId),
+                            "parkingQuoteOperation": "Start",
+                            "durationTimeUnit": "Minutes",
+                            "durationQuantity": str(duration),
+                            "licensePlate": self.licensePlate,
+                            "stall": "",
+                            "paymentAccountId": self.payment.paymentAccountId,
+                            "paymentCardType": self.payment.cardType,
+                            "paymentScope": "Private"
+                        }
+                    }
+                ]
+            },
+            "query": "mutation CreateQuotesV1($requests: [QuoteRequestInput!]!) {\n  createQuotesV1(input: {requests: $requests}) {\n    createQuotesResponse {\n      totalCost {\n        amount\n        currency\n        __typename\n      }\n      quotes {\n        quoteId\n        quoteRequestId\n        cost {\n          amount\n          currency\n          __typename\n        }\n        details {\n          quoteId\n          locationId\n          stall\n          quoteDate\n          parkingStartTime\n          parkingExpiryTime\n          parkingDurationAdjustment\n          licensePlate\n          corporateAccountSmsOverride\n          corporateAccountSmsConfirmationOverride\n          corporateAccountSmsReminderOverride\n          promotionApplied {\n            id\n            cost {\n              amount\n              currency\n              __typename\n            }\n            duration {\n              quantity\n              timeUnit\n              __typename\n            }\n            displayName\n            usage\n            isSelectedByUser\n            isTimeSplit\n            isExternal\n            configuredDuration {\n              quantity\n              timeUnit\n              __typename\n            }\n            minimumIncrement {\n              quantity\n              timeUnit\n              __typename\n            }\n            __typename\n          }\n          totalCost {\n            amount\n            currency\n            __typename\n          }\n          quoteItems {\n            quoteItemType\n            name\n            costAmount {\n              amount\n              currency\n              __typename\n            }\n            subQuoteItems {\n              quoteItemType\n              name\n              costAmount {\n                amount\n                currency\n                __typename\n              }\n              __typename\n            }\n            __typename\n          }\n          __typename\n        }\n        product\n        __typename\n      }\n      quoteErrors {\n        quoteRequestId\n        product\n        status\n        reason\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
         })
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'fr-FR,fr;q=0.9',
-            'authorization': f'Bearer {self.client.accessToken}',
-            'cache-control': 'no-cache',
-            'content-type': 'application/json',
-            'origin': 'https://m.paybyphone.com',
-            'pragma': 'no-cache',
-            'priority': 'u=1, i',
-            'referer': 'https://m.paybyphone.com/',
-            'sec-ch-ua': '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'cross-site',
-            'sec-gpc': '1',
-        }
         
-        r = self.client.post(url,headers=headers,payload=payload)
-        
+        r = self.client.post(url, headers=self._get_headers(), payload=payload)
         data = r.json()
         
-        if not data or not "data" in data or not "createQuotesV1" in data["data"]:
-            raise(ValueError("Error getting Quotes"))
+        if not data or "data" not in data or "createQuotesV1" not in data["data"]:
+            raise ValueError(f"Erreur lors de la récupération des devis : {data}")
                 
         simplerData = data["data"]["createQuotesV1"]["createQuotesResponse"]
-        quoteId = simplerData["quotes"][0]["quoteId"]
+        quoteErrors = simplerData.get("quoteErrors", [])
+        if quoteErrors:
+            raise ValueError(f"Erreur API devis PayByPhone : {quoteErrors}")
+
+        quotes = simplerData.get("quotes", [])
+        if not quotes:
+            raise ValueError("Aucun devis disponible pour cette durée.")
+
+        quoteId = quotes[0]["quoteId"]
         price = simplerData["totalCost"]["amount"]
         
-        return {"price":price,"quoteId":quoteId}
+        return {"price": price, "quoteId": quoteId}
     
-    def startParking(self,quoteId):
-        
+    
+    
+    def startParking(self, quoteId: str) -> dict:
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
         payload = json.dumps({
-        "operationName": None,
-        "variables": {
-            "input": {
-            "request": {
-                "quoteId": quoteId
-            }
-            }
-        },
-        "query": "mutation StartParkingSessionV1($input: StartParkingSessionV1Input!) {\n  startParkingSessionV1(input: $input) {\n    parkingSessionResponse {\n      parkingSessionId\n      expireTime\n      isEarlyCapture\n      segmentTotalCost {\n        amount\n        currency\n        __typename\n      }\n      metadata\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
+            "operationName": None,
+            "variables": {
+                "input": {
+                    "request": {
+                        "quoteId": quoteId
+                    }
+                }
+            },
+            "query": "mutation StartParkingSessionV1($input: StartParkingSessionV1Input!) {\n  startParkingSessionV1(input: $input) {\n    parkingSessionResponse {\n      parkingSessionId\n      expireTime\n      isEarlyCapture\n      segmentTotalCost {\n        amount\n        currency\n        __typename\n      }\n      metadata\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
         })
-        headers = {
-        'accept': '*/*',
-        'accept-language': 'fr-FR,fr;q=0.9',
-        'authorization': f'Bearer {self.client.accessToken}',
-        'cache-control': 'no-cache',
-        'content-type': 'application/json',
-        'origin': 'https://m.paybyphone.com',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://m.paybyphone.com/',
-        'sec-ch-ua': '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'sec-gpc': '1',
-        }
                 
-        r = self.client.post(url,headers=headers,payload=payload)
+        r = self.client.post(url, headers=self._get_headers(), payload=payload)
         data = r.json()
         
-        if not data or not "data" in data or not "startParkingSessionV1" in data["data"]:
-            raise(ValueError("Error Starting Parking"))     
+        if not data or "data" not in data or "startParkingSessionV1" not in data["data"]:
+            raise ValueError(f"Erreur au démarrage du stationnement : {data}")     
         
         simplerData = data['data']['startParkingSessionV1']['parkingSessionResponse']
         
-        parkingSegmentId = simplerData['metadata']['parkingSegmentId']
+        raw_metadata = simplerData.get('metadata')
+        if isinstance(raw_metadata, str):
+            try:
+                metadata = json.loads(raw_metadata)
+            except Exception:
+                metadata = {}
+        elif isinstance(raw_metadata, dict):
+            metadata = raw_metadata
+        else:
+            metadata = {}
+
+        parkingSegmentId = str(metadata.get('parkingSegmentId', raw_metadata or ''))
         parkingSessionId = simplerData['parkingSessionId']
+        amount = simplerData["segmentTotalCost"]["amount"]
+        endingTime = simplerData["expireTime"]
         
-        return {'parkingSessionId':parkingSessionId,'parkingSegmentId':parkingSegmentId}
+        return {
+            'parkingSessionId': parkingSessionId,
+            'parkingSegmentId': parkingSegmentId,
+            'amount': amount,
+            'endingTime': endingTime
+        }
     
-    def create3DS(self,parkingSessionId,endingTime,amount,parkingSegmentId):
-        
+    
+    
+    def create3DS(self, parkingSessionId: str, endingTime: str, amount: float, parkingSegmentId: str) -> str:
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
         payload = json.dumps({
-        "operationName": None,
-        "variables": {
-            "input": {
-            "request": {
-                "paymentMethod": {
-                "paymentMethodType": "PaymentAccount",
-                "paymentDetails": {
-                    "$type": "paymentAccount",
-                    "paymentAccountId": self.payment.paymentAccountId,
-                    "cvv": None,
-                    "clientBrowserDetails": {
-                    "browserAcceptHeader": "text/html",
-                    "browserColorDepth": 24,
-                    "browserJavaEnabled": False,
-                    "browserLanguage": "fr-FR",
-                    "browserScreenHeight": 1440,
-                    "browserScreenWidth": 2560,
-                    "browserTimeZone": 120,
-                    "browserUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
-                    "flag3D": "Y",
-                    "httpAccept": "*/*",
-                    "httpUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+            "operationName": None,
+            "variables": {
+                "input": {
+                    "request": {
+                        "paymentMethod": {
+                            "paymentMethodType": "PaymentAccount",
+                            "paymentDetails": {
+                                "$type": "paymentAccount",
+                                "paymentAccountId": self.payment.paymentAccountId,
+                                "cvv": None,
+                                "clientBrowserDetails": {
+                                    "browserAcceptHeader": "text/html",
+                                    "browserColorDepth": 24,
+                                    "browserJavaEnabled": False,
+                                    "browserLanguage": "fr-FR",
+                                    "browserScreenHeight": 1440,
+                                    "browserScreenWidth": 2560,
+                                    "browserTimeZone": 120,
+                                    "browserUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+                                    "flag3D": "Y",
+                                    "httpAccept": "*/*",
+                                    "httpUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+                                }
+                            }
+                        },
+                        "lineItems": [
+                            {
+                                "productType": "parking",
+                                "productReferenceId": parkingSessionId,
+                                "vendorId": "12021",
+                                "endingTime": endingTime,
+                                "isEarlyCapture": False,
+                                "amount": {
+                                    "value": float(amount),
+                                    "isoCurrencyCode": "EUR"
+                                },
+                                "required": True,
+                                "metadata": json.dumps({"parkingSegmentId": str(parkingSegmentId)})
+                            }
+                        ]
                     }
                 }
-                },
-                "lineItems": [
-                {
-                    "productType": "parking",
-                    "productReferenceId": parkingSessionId,
-                    "vendorId": "12021",
-                    "endingTime": endingTime,
-                    "isEarlyCapture": False,
-                    "amount": {
-                    "value": amount,
-                    "isoCurrencyCode": "EUR"
-                    },
-                    "required": True,
-                    "metadata": '{"parkingSegmentId":"' + parkingSegmentId + '"}'
-                }
-                ]
-            }
-            }
-        },
-        "query": "mutation CreateJobV1($input: CreateJobV1Input!) {\n  createJobV1(input: $input) {\n    createJobResponse {\n      jobId\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
+            },
+            "query": "mutation CreateJobV1($input: CreateJobV1Input!) {\n  createJobV1(input: $input) {\n    createJobResponse {\n      jobId\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
         })
-        headers = {
-        'accept': '*/*',
-        'accept-language': 'fr-FR,fr;q=0.9',
-        'authorization': 'Bearer eyJ4NXQiOiJTcEE0cFc1U0RXZ09STW1FbXRTczkwX1VVZWciLCJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjRBOTAzOEE1NkU1MjBENjgwRTQ0Qzk4NDlBRDRBQ0Y3NEZENDUxRTgifQ.eyJtZW1iZXJpZCI6ImJkMTQ3Y2ZkLWEzZDUtNDVkMi05YjA4LTM1YmFkMjVkYjVmMCIsImFjdGl2ZXVzZXJhY2NvdW50IjoiYmQxNDdjZmQtYTNkNS00NWQyLTliMDgtMzViYWQyNWRiNWYwIiwibmJmIjoxNzg5OTczNzYyLCJndHkiOiJwYXNzd29yZCIsImp0aSI6IlZxVTJ4aWMxc1M1SjU5ZVplQUhwSyIsInN1YiI6ImJkMTQ3Y2ZkLWEzZDUtNDVkMi05YjA4LTM1YmFkMjVkYjVmMCIsImlhdCI6MTc4OTk3Mzc2MiwiZXhwIjoxNzg5OTc0OTYyLCJzY29wZSI6InBheWJ5cGhvbmUiLCJpc3MiOiJQYXlCeVBob25lIElkZW50aXR5IEFuZCBBY2Nlc3MiLCJhdWQiOlsiaHR0cHM6Ly9jb25zdW1lci5wYXlieXBob25lYXBpcy5jb20iLCJodHRwczovL2NvbnN1bWVyLnBheWJ5cGhvbmVhcGlzLmNvbS9pZGVudGl0eSIsInBicF9hcGlfZnBzcGF5bWVudHMiLCJwYnBfYXBpX3BhcmtpbmciLCJwYnBfYXBpX3BheW1lbnQiLCJwYnBfYXBpX3Byb2ZpbGVzZXJ2aWNlIiwicGJwX2lkYSIsImh0dHA6Ly9hcGkucGF5YnlwaG9uZS5jb20iLCJodHRwOi8vYXBpLnFhLnBheWJ5cGhvbmUuY29tIl0sImF6cCI6InBheWJ5cGhvbmVfd2ViIn0.i7cX-gmJoDLqkMyWJAMl-NLkPxShCTiQ6HNDBLLfkZ_D1x2kXMg8_nkUafo3VqQMmGmDER6nJwYU4pSyjLv1kZHudVbKAQr9GN0pMtiKfx3dtxRyof9FArlL7MfKPkH8tzukYVivVRzW9LJQ3ST54RZWHtPypwrryMflyfsMP-pYG03yVLof_1Jldt4YdjSAOMH9VWdu9crU-LHhIgaSSNg50iDkFsClGs3V3Zfc22oU86zLwgHDfXtBClBzu6yBvCzCIYTzmU94nfTlzaRndteyKjKnTJTSHqq-PCPxsH9mTseUY0ezILglCzeRx3pzC0a8udO7es2IVPe-DLObDA',
-        'cache-control': 'no-cache',
-        'content-type': 'application/json',
-        'origin': 'https://m.paybyphone.com',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://m.paybyphone.com/',
-        'sec-ch-ua': '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'sec-gpc': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
-        }
         
-        r = self.client.post(url,headers=headers,payload=payload)
+        r = self.client.post(url, headers=self._get_headers(), payload=payload)
         data = r.json()
         
-        if not data or not "data" in data or not "createJobV1" in data["data"]:
-            raise(ValueError("Error checkout"))
+        if not data or "data" not in data or "createJobV1" not in data["data"]:
+            raise ValueError(f"Erreur lors de la création du job de paiement 3DS : {data}")
         
         jobId = data['data']['createJobV1']['createJobResponse']['jobId']
-        
         return jobId
     
     
-    def check3DS(self,jobId):
+    
+    def check3DS(self, jobId: str, max_retries: int = 30, delay: float = 1.0) -> str:
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
         payload = json.dumps({
-        "operationName": None,
-        "variables": {
-            "jobId": jobId
-        },
-        "query": "query GetJobV1($jobId: UUID!) {\n  getJobV1(jobId: $jobId) {\n    jobId\n    status\n    captureGroups {\n      captureGroupId\n      stage\n      status\n      closedAt\n      authentication {\n        hiddenIframe\n        challengeUrl\n        challengeHtml\n        token\n        __typename\n      }\n      lineItems {\n        itemId\n        productReferenceId\n        status\n        metadata\n        amount {\n          value\n          isoCurrencyCode\n          __typename\n        }\n        executionDetails {\n          isFailure\n          code\n          message\n          metadata\n          __typename\n        }\n        __typename\n      }\n      couponAmount {\n        value\n        isoCurrencyCode\n        __typename\n      }\n      couponDetails {\n        status {\n          code\n          status\n          message\n          __typename\n        }\n        couponId\n        redeemedAt\n        requestedAt\n        totalAmountRedeemed {\n          value\n          isoCurrencyCode\n          __typename\n        }\n        __typename\n      }\n      executionDetails {\n        isFailure\n        code\n        message\n        metadata\n        captureGroupStage\n        __typename\n      }\n      isPaymentOpenToModification\n      __typename\n    }\n    executionDetails {\n      isFailure\n      code\n      message\n      metadata\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
+            "operationName": None,
+            "variables": {
+                "jobId": jobId
+            },
+            "query": "query GetJobV1($jobId: UUID!) {\n  getJobV1(jobId: $jobId) {\n    jobId\n    status\n    captureGroups {\n      captureGroupId\n      stage\n      status\n      closedAt\n      authentication {\n        hiddenIframe\n        challengeUrl\n        challengeHtml\n        token\n        __typename\n      }\n      lineItems {\n        itemId\n        productReferenceId\n        status\n        metadata\n        amount {\n          value\n          isoCurrencyCode\n          __typename\n        }\n        executionDetails {\n          isFailure\n          code\n          message\n          metadata\n          __typename\n        }\n        __typename\n      }\n      couponAmount {\n        value\n        isoCurrencyCode\n        __typename\n      }\n      couponDetails {\n        status {\n          code\n          status\n          message\n          __typename\n        }\n        couponId\n        redeemedAt\n        requestedAt\n        totalAmountRedeemed {\n          value\n          isoCurrencyCode\n          __typename\n        }\n        __typename\n      }\n      executionDetails {\n        isFailure\n        code\n        message\n        metadata\n        captureGroupStage\n        __typename\n      }\n      isPaymentOpenToModification\n      __typename\n    }\n    executionDetails {\n      isFailure\n      code\n      message\n      metadata\n      __typename\n    }\n    __typename\n  }\n  __typename\n}"
         })
-        headers = {
-        'accept': '*/*',
-        'accept-language': 'fr-FR,fr;q=0.9',
-        'authorization': f'Bearer {self.client.accessToken}',
-        'cache-control': 'no-cache',
-        'content-type': 'application/json',
-        'origin': 'https://m.paybyphone.com',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://m.paybyphone.com/',
-        'sec-ch-ua': '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'sec-gpc': '1'
-        }
+
+        for attempt in range(max_retries):
+            r = self.client.post(url, headers=self._get_headers(), payload=payload)
+            data = r.json()
+            if not data or "data" not in data or "getJobV1" not in data["data"]:
+                raise ValueError(f"Erreur lors de la vérification 3DS : {data}")
+            
+            capture_groups = data["data"]["getJobV1"].get("captureGroups", [])
+            if not capture_groups or not capture_groups[0].get("lineItems"):
+                time.sleep(delay)
+                continue
+
+            line_item = capture_groups[0]["lineItems"][0]
+            status = line_item.get("status")
+
+            print(f"[*] Statut 3DS : {status} (tentative {attempt + 1}/{max_retries})")
+
+            if status == "pending":
+                time.sleep(delay)
+                continue
+            elif status == "fulfillmentCompleted":
+                return status
+            else:
+                exec_details = line_item.get("executionDetails")
+                raise ValueError(f"Statut 3DS inattendu ou échec : {status} - Détails : {exec_details}")
+
+        raise TimeoutError(f"Le paiement 3DS a expiré après {max_retries} tentatives.")
         
-        r = self.client.post(url,headers=headers,payload=payload)
-        data = r.json()
-        if not data or not "data" in data or not "getJobV1" in data["data"]:
-            raise(ValueError("Error checking 3DS"))
-        
-             
+
              
 
                     
