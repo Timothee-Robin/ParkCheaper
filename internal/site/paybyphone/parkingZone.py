@@ -6,14 +6,17 @@ from internal.client.client import Client
 
 class ParkingZone:
 
-    def __init__(self, client: Client, zone: str):
+    def __init__(self, client: Client, zone: str, licensePlate: str | None = None):
         self.zone = str(zone)
         self.client = client
         self.ratePolicyId: str | None = None
         self.maxStay: int = 0
-        self.licensePlate: str = (
-            self.client.account.vehiclesList[0].licensePlate
-        )
+        if licensePlate:
+            self.licensePlate = licensePlate
+        elif self.client.account and self.client.account.vehiclesList:
+            self.licensePlate = self.client.account.vehiclesList[0].licensePlate
+        else:
+            self.licensePlate = ""
         self._url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
     def _get_headers(self) -> dict:

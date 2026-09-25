@@ -15,6 +15,7 @@ class ParkingOptimizer:
         self.step = step_minutes
         self.allow_free_quota_once = allow_free_quota_once
         self._price_cache: dict[int, float] = {}
+        self._single_ticket_quotes: dict[int, float] = {}
         self.promo_duration: int = 0  # Ex: 30 minutes offertes 1 fois
 
     def fetch_tariffs(self, durations: list[int] | None = None) -> None:
@@ -32,6 +33,11 @@ class ParkingOptimizer:
                 real_dur, cost, promo_dur, promo_usage = (
                     self.parkingZone.getQuote(d)
                 )
+
+                # Enregistrement du coût brut d'un ticket unique pour cette durée
+                self._single_ticket_quotes[d] = cost
+                if real_dur not in self._single_ticket_quotes:
+                    self._single_ticket_quotes[real_dur] = cost
 
                 if promo_dur > 0 and promo_usage == "Quota":
                     if promo_dur > self.promo_duration:
@@ -133,12 +139,59 @@ class ParkingOptimizer:
             "covered_minutes": best_target,
         }
 
+    def get_single_ticket_cost(self, duration_minutes: int) -> float:
+        """Calcule le tarif qu'un utilisateur paierait pour un seul ticket couvrant duration_minutes."""
+        if duration_minutes <= 0:
+            return 0.0
+
+        max_stay = self.parkingZone.maxStay or 1125
+
+        if duration_minutes > max_stay:
+            nb_full = duration_minutes // max_stay
+            rem = duration_minutes % max_stay
+            cost_full = self.get_single_ticket_cost(max_stay)
+            cost_rem = self.get_single_ticket_cost(rem) if rem > 0 else 0.0
+            return round(nb_full * cost_full + cost_rem, 2)
+
+        # 1. Si le quota gratuit est activé (comportement d'un ticket unique normal sur PayByPhone)
+        if self.allow_free_quota_once:
+            if duration_minutes in self._single_ticket_quotes:
+                return self._single_ticket_quotes[duration_minutes]
+            try:
+                _, cost, _, _ = self.parkingZone.getQuote(duration_minutes)
+                self._single_ticket_quotes[duration_minutes] = cost
+                return cost
+            except Exception:
+                pass
+
+        # 2. Si le quota gratuit n'est pas autorisé (tarif plein sans promotion)
+        if not self.allow_free_quota_once:
+            if duration_minutes in self._price_cache:
+                return self._price_cache[duration_minutes]
+            target_with_promo = duration_minutes + self.promo_duration
+            if target_with_promo in self._single_ticket_quotes:
+                return self._single_ticket_quotes[target_with_promo]
+            try:
+                if self.promo_duration > 0 and (duration_minutes + self.promo_duration) <= max_stay:
+                    _, cost_without, _, _ = self.parkingZone.getQuote(duration_minutes + self.promo_duration)
+                    return cost_without
+            except Exception:
+                pass
+
+        if duration_minutes in self._single_ticket_quotes:
+            return self._single_ticket_quotes[duration_minutes]
+
+        if duration_minutes in self._price_cache:
+            return self._price_cache[duration_minutes]
+
+        return 0.0
+
     def optimize(
         self,
         start_time: str | None = None,
         end_time: str | None = None,
         duration_minutes: int | None = None,
-    ) -> dict[str, float | list[int] | int | dict]:
+    ) -> dict[str, float | list[int] | int | dict | bool]:
         # 1. Calcul de la durée demandée
         if duration_minutes is not None:
             raw_minutes = duration_minutes
@@ -152,13 +205,24 @@ class ParkingOptimizer:
             )
 
         if raw_minutes <= 0:
-            return {"total_cost": 0.0, "tickets": [], "covered_minutes": 0}
+            return {
+                "total_cost": 0.0,
+                "tickets": [],
+                "covered_minutes": 0,
+                "single_ticket_cost": 0.0,
+                "has_promo": False,
+                "without_promo": {"total_cost": 0.0, "tickets": [], "covered_minutes": 0},
+            }
 
         target_minutes = math.ceil(raw_minutes / self.step) * self.step
+
+        # Coût standard pour un seul ticket couvrant la durée cible
+        single_cost = self.get_single_ticket_cost(target_minutes)
 
         # Résolution de l'option 100% payante (sans promotion)
         option_paid = self._solve_dp(target_minutes)
 
+        has_promo = False
         # Si l'utilisation du quota gratuit est activée et qu'un quota existe
         if self.allow_free_quota_once and self.promo_duration > 0:
             remaining_minutes = max(0, target_minutes - self.promo_duration)
@@ -183,17 +247,30 @@ class ParkingOptimizer:
                 }
 
             # Comparaison avec l'option 100% payante
-            best = (
-                option_promo
-                if option_promo["total_cost"] <= option_paid["total_cost"]
-                else option_paid
-            )
+            if option_promo["total_cost"] <= option_paid["total_cost"]:
+                best = option_promo
+                has_promo = True
+            else:
+                best = option_paid
+                has_promo = False
+        else:
+            best = option_paid
+            has_promo = False
 
-            return {
-                "total_cost": best["total_cost"],
-                "tickets": best["tickets"],
-                "covered_minutes": best["covered_minutes"],
-                "without_promo": option_paid,
+        # Si l'achat d'un seul ticket est moins cher ou égal
+        if single_cost > 0 and single_cost < best["total_cost"]:
+            best = {
+                "total_cost": single_cost,
+                "tickets": [target_minutes],
+                "covered_minutes": target_minutes,
             }
+            has_promo = self.allow_free_quota_once and self.promo_duration > 0
 
-        return option_paid
+        return {
+            "total_cost": best["total_cost"],
+            "tickets": best["tickets"],
+            "covered_minutes": best["covered_minutes"],
+            "single_ticket_cost": single_cost,
+            "has_promo": has_promo,
+            "without_promo": option_paid,
+        }

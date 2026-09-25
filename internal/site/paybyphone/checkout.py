@@ -7,14 +7,17 @@ import uuid
 
 class CheckoutClient:
 
-    def __init__(self, client: Client, ticketList: list[int], parkingZone: ParkingZone):
+    def __init__(self, client: Client, ticketList: list[int], parkingZone: ParkingZone, licensePlate: str | None = None):
         self.client = client
         self.ticketList = ticketList  # Ex: [30, 60, 60]
         if not self.client.account.vehiclesList:
-            raise ValueError("Aucun véhicule trouvé sur le compte. Assurez-vous d'avoir appelé auth.checkVehicles().")
+            raise ValueError("No vehicles found on account. Make sure auth.checkVehicles() was called.")
         if not self.client.account.cardsList:
-            raise ValueError("Aucune carte trouvée sur le compte. Assurez-vous d'avoir appelé auth.checkPayement().")
-        self.licensePlate = self.client.account.vehiclesList[0].licensePlate
+            raise ValueError("No payment cards found on account. Make sure auth.checkPayment() was called.")
+        if licensePlate:
+            self.licensePlate = licensePlate
+        else:
+            self.licensePlate = self.client.account.vehiclesList[0].licensePlate
         self.payment = self.client.account.cardsList[0]
         self.parkingZone = parkingZone
         self.zone = self.parkingZone.zone
@@ -44,8 +47,8 @@ class CheckoutClient:
 
 
     def checkoutTicket(self, duration_minutes: int) -> dict:
-        """Déclenche la mutation d'achat/paiement réel du ticket sur PayByPhone."""
-        print(f"[+] Achat en cours pour {duration_minutes} min sur zone {self.zone}...")
+        """Triggers ticket purchase and payment on PayByPhone."""
+        print(f"[+] Purchasing ticket for {duration_minutes} min in zone {self.zone} (Plate: {self.licensePlate})...")
         quote = self.createQuoteWithCard(duration_minutes)
         startParking = self.startParking(quote['quoteId'])
         job = self.create3DS(
@@ -65,7 +68,7 @@ class CheckoutClient:
 
 
     def checkParkingSession(self) -> dict:
-        """Récupère la session active et renvoie son expireTime en timestamp UTC."""
+        """Retrieves active session and returns its expireTime in UTC timestamp."""
         url = "https://consumer.paybyphoneapis.com/uapi/graphql"
 
         
@@ -101,9 +104,9 @@ class CheckoutClient:
 
         sessions = data.get("data", {}).get("getParkingSessionsV1", [])
         if not sessions:
-            raise ValueError("Aucune session active détectée sur l'API.")
+            raise ValueError("No active session detected on API.")
 
-        # Filtrer la session correspondant à notre véhicule et zone
+        # Filter session matching our vehicle and zone
         matching_session = None
         for s in sessions:
             zone_match = (
@@ -118,7 +121,7 @@ class CheckoutClient:
 
         if not matching_session:
             raise ValueError(
-                f"Aucune session active pour la plaque {self.licensePlate} en zone {self.zone}."
+                f"No active session for license plate {self.licensePlate} in zone {self.zone}."
             )
 
         # Parse ISO date '2026-09-19T10:12:24.000Z'
@@ -326,7 +329,7 @@ class CheckoutClient:
         data = r.json()
         
         if not data or "data" not in data or "createJobV1" not in data["data"]:
-            raise ValueError(f"Erreur lors de la création du job de paiement 3DS : {data}")
+            raise ValueError(f"Error creating 3DS payment job: {data}")
         
         jobId = data['data']['createJobV1']['createJobResponse']['jobId']
         return jobId
@@ -348,7 +351,7 @@ class CheckoutClient:
             r = self.client.post(url, headers=self._get_headers(), payload=payload)
             data = r.json()
             if not data or "data" not in data or "getJobV1" not in data["data"]:
-                raise ValueError(f"Erreur lors de la vérification 3DS : {data}")
+                raise ValueError(f"Error checking 3DS: {data}")
             
             capture_groups = data["data"]["getJobV1"].get("captureGroups", [])
             if not capture_groups or not capture_groups[0].get("lineItems"):
@@ -358,7 +361,7 @@ class CheckoutClient:
             line_item = capture_groups[0]["lineItems"][0]
             status = line_item.get("status")
 
-            print(f"[*] Statut 3DS : {status} (tentative {attempt + 1}/{max_retries})")
+            print(f"[*] 3DS Status: {status} (attempt {attempt + 1}/{max_retries})")
 
             if status == "pending":
                 time.sleep(delay)
@@ -367,9 +370,9 @@ class CheckoutClient:
                 return status
             else:
                 exec_details = line_item.get("executionDetails")
-                raise ValueError(f"Statut 3DS inattendu ou échec : {status} - Détails : {exec_details}")
+                raise ValueError(f"Unexpected or failed 3DS status: {status} - Details: {exec_details}")
 
-        raise TimeoutError(f"Le paiement 3DS a expiré après {max_retries} tentatives.")
+        raise TimeoutError(f"3DS verification timed out after {max_retries} attempts.")
         
 
              

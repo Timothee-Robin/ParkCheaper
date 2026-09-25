@@ -6,7 +6,8 @@ from internal.models.card import Card
 class Account:
     phone:str
     pswd:str
-    
+    email: str | None = None
+
     memberId: str | None = None
     vehiclesList: list[Vehicle] | None = None
     cardsList: list[Card] | None = None

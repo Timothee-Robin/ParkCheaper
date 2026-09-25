@@ -97,6 +97,7 @@ class AuthServices():
         print("Account details : \n",accDetails)
         
         self.client.account.memberId = simplerData["memberId"]
+        self.client.account.email = accDetails['email']
         
         
     def checkVehicles(self):
@@ -198,4 +199,4 @@ class AuthServices():
 
     # Aliases pour la cohérence des noms de méthodes
     checkPayment = checkPayement
-    checkAccountDetails = checkAccountdetails
+    checkAccountDetails = checkAccountdetails

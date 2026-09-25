@@ -1,3 +1,8 @@
 requests
-json
 python-dotenv
+fastapi
+uvicorn
+pydantic
+websockets
+pystray
+pillow
