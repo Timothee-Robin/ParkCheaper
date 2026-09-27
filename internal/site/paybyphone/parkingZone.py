@@ -72,7 +72,19 @@ class ParkingZone:
         rate_options = data["data"]["getRateOptionsV1"][0]
         
         self.ratePolicyId = rate_options["ratePolicyId"]
-        self.maxStay = int(rate_options["effectiveMaxStayDuration"]["quantity"])
+        stay_info = rate_options.get("effectiveMaxStayDuration", {})
+        qty = int(stay_info.get("quantity", 0))
+        unit = stay_info.get("timeUnit", "Minutes")
+
+        if unit == "Days":
+            self.maxStay = qty * 24 * 60
+        elif unit == "Hours":
+            self.maxStay = qty * 60
+        else:
+            self.maxStay = qty
+
+        if self.maxStay <= 0:
+            self.maxStay = 240
 
     def getQuote(self, duration_minutes: int) -> tuple[int, float, int, str | None]:
         """Retourne un tuple : (durée_totale_min, coût_total, durée_offerte_min, usage_promo)"""
@@ -158,14 +170,13 @@ class ParkingZone:
         details = quotes[0]["details"]
         total_cost = float(response_root["totalCost"]["amount"])
 
-        # Calcul de la durée exacte allouée par le serveur
+        # Calcul de la durée exacte allouée par le serveur (durée demandée)
         t_start = datetime.fromisoformat(
             details["parkingStartTime"].replace("Z", "+00:00")
         )
         t_end = datetime.fromisoformat(
             details["parkingExpiryTime"].replace("Z", "+00:00")
         )
-        real_duration = int((t_end - t_start).total_seconds() // 60)
 
         # Détection précise du quota gratuit
         promo = details.get("promotionApplied")
@@ -178,4 +189,6 @@ class ParkingZone:
                 promo_duration = int(dur_data.get("quantity", 0))
                 promo_usage = promo.get("usage")
 
-        return real_duration, total_cost, promo_duration, promo_usage
+        # La durée de tarification est la durée demandée (duration_minutes)
+        # Note : (t_end - t_start) inclut les plages de gratuité (nuit, pause déjeuner)
+        return duration_minutes, total_cost, promo_duration, promo_usage

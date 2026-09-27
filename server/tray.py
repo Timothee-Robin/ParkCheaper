@@ -60,12 +60,12 @@ class SystemTrayApp:
             pystray.MenuItem("Open Web Dashboard", self.open_dashboard, default=True),
             pystray.MenuItem(f"Dashboard URL: {self.url}", lambda icon, item: None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Exit PayByPhone Buyer", self.quit_app)
+            pystray.MenuItem("Exit ParkCheaper", self.quit_app)
         )
         self.icon = pystray.Icon(
-            name="PaybyPhoneBuyer",
+            name="ParkCheaper",
             icon=image,
-            title=f"PayByPhone Buyer ({self.url})",
+            title=f"ParkCheaper ({self.url})",
             menu=menu
         )
         self.icon.run_detached()

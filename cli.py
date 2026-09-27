@@ -16,7 +16,7 @@ def ensure_stdio():
     appdata = os.getenv("APPDATA")
     if appdata:
         try:
-            log_dir = Path(appdata) / "PaybyPhoneBuyer"
+            log_dir = Path(appdata) / "ParkCheaper"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = open(log_dir / "app.log", "a", encoding="utf-8", buffering=1, errors="replace")
         except Exception:
@@ -61,6 +61,7 @@ def load_credentials():
     ]
     appdata = os.getenv("APPDATA")
     if appdata:
+        candidates.append(Path(appdata) / "ParkCheaper" / ".env")
         candidates.append(Path(appdata) / "PaybyPhoneBuyer" / ".env")
     candidates.append(Path.home() / ".paybyphone" / ".env")
 
@@ -156,20 +157,32 @@ def cmd_optimize(args):
     tickets = result.get("tickets", [])
     covered = result.get("covered_minutes", 0)
 
+    is_free = result.get("is_free") or (optimized == 0.0 and single_ticket == 0.0)
+    has_promo = result.get("has_promo", "without_promo" in result)
+
     print("\n" + "=" * 60)
     print(f" OPTIMIZED PARKING PLAN (Zone {args.zone} | Plate: {pz.licensePlate})")
     print("=" * 60)
     print(f" Covered Duration   : {covered // 60}h {covered % 60}m ({covered} minutes)")
-    print(f" Single Ticket Cost : €{single_ticket:.2f}")
-    print(f" Optimized Cost     : €{optimized:.2f}")
-    print(f" Savings vs Single  : -€{savings:.2f} (-{percent}%)")
+    if is_free:
+        print(f" Single Ticket Cost : €0.00 (Gratuit)")
+        print(f" Optimized Cost     : €0.00 (Gratuit)")
+        print(f" Status             : GRATUIT (Dimanche / Jour férié ou Hors heures payantes)")
+    else:
+        print(f" Single Ticket Cost : €{single_ticket:.2f}")
+        print(f" Optimized Cost     : €{optimized:.2f}")
+        print(f" Savings vs Single  : -€{savings:.2f} (-{percent}%)")
     print("-" * 60)
     print(f" {'#':<3} | {'DURATION':<10} | {'TYPE':<25}")
     print("-" * 60)
     
-    has_promo = result.get("has_promo", "without_promo" in result)
     for idx, d in enumerate(tickets, 1):
-        ticket_type = "Municipal Free Quota" if (idx == 1 and has_promo) else "Optimized Paid Ticket"
+        if is_free:
+            ticket_type = "Gratuit (Free Parking)"
+        elif idx == 1 and has_promo:
+            ticket_type = "Municipal Free Quota"
+        else:
+            ticket_type = "Optimized Paid Ticket"
         print(f" {idx:<3} | {d:>4} min    | {ticket_type}")
 
     print("=" * 60)
@@ -274,7 +287,7 @@ def cmd_serve(args):
 
     url = f"http://{host}:{port}"
     print("=" * 60)
-    print(" PAYBYPHONE BUYER DESK")
+    print(" PARKCHEAPER DESK")
     print("=" * 60)
     print(f" Local Web UI   : {url}")
     print(f" REST & WS API  : {url}/api/...")

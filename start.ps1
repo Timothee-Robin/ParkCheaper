@@ -1,6 +1,6 @@
-# Script de lancement rapide de PayByPhone Buyer (Backend + Frontend)
+# Script de lancement rapide de ParkCheaper (Backend + Frontend)
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   PayByPhone Smart Buyer - Lancement     " -ForegroundColor Cyan
+Write-Host "         ParkCheaper - Lancement          " -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 $backend = Start-Process python -ArgumentList "-m uvicorn server.app:app --port 8000 --reload" -PassThru -NoNewWindow

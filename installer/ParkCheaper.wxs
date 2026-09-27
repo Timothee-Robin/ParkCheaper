@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
-           Name="PayByPhone Buyer"
+           Name="ParkCheaper"
            Language="1033"
-           Version="1.1.0"
+           Version="1.2.0"
            Manufacturer="Timothee Robin"
            UpgradeCode="8C8E645B-C234-4533-87FD-4375369A1C5A">
 
     <Package InstallerVersion="300"
              Compressed="yes"
              InstallScope="perMachine"
-             Description="PayByPhone Smart Buyer &amp; Optimization Engine"
-             Comments="PayByPhone Desktop &amp; CLI Suite" />
+             Description="ParkCheaper - Smart Parking Optimizer &amp; Buyer"
+             Comments="ParkCheaper Desktop &amp; CLI Suite" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -23,10 +23,10 @@
     <!-- Directory layout -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="PayByPhone Buyer" />
+        <Directory Id="INSTALLFOLDER" Name="ParkCheaper" />
       </Directory>
       <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="PayByPhone Buyer" />
+        <Directory Id="ApplicationProgramsFolder" Name="ParkCheaper" />
       </Directory>
       <Directory Id="DesktopFolder" Name="Desktop" />
     </Directory>
@@ -34,12 +34,12 @@
     <!-- Executables component -->
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="MainExecutable" Guid="3F8090C1-6029-4A9C-8A5B-A484C7B07D3E" Win64="yes">
-        <File Id="PaybyPhoneBuyerExe"
-              Source="dist\PaybyPhoneBuyer.exe"
+        <File Id="ParkCheaperExe"
+              Source="dist\ParkCheaper.exe"
               KeyPath="yes"
               Checksum="yes" />
-        <File Id="PaybyPhoneBuyerCliExe"
-              Source="dist\PaybyPhoneBuyer-cli.exe"
+        <File Id="ParkCheaperCliExe"
+              Source="dist\ParkCheaper-cli.exe"
               Checksum="yes" />
       </Component>
     </DirectoryRef>
@@ -48,21 +48,21 @@
     <DirectoryRef Id="ApplicationProgramsFolder">
       <Component Id="ApplicationShortcut" Guid="7244B741-6923-49AC-BCDF-08182DECD601">
         <Shortcut Id="ApplicationStartMenuShortcut"
-                  Name="PayByPhone Buyer"
-                  Description="Launch PayByPhone Buyer web interface &amp; tray application"
-                  Target="[INSTALLFOLDER]PaybyPhoneBuyer.exe"
+                  Name="ParkCheaper"
+                  Description="Launch ParkCheaper web interface &amp; tray application"
+                  Target="[INSTALLFOLDER]ParkCheaper.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   Icon="AppIcon.ico" />
         <Shortcut Id="ApplicationDesktopShortcut"
                   Directory="DesktopFolder"
-                  Name="PayByPhone Buyer"
-                  Description="Launch PayByPhone Buyer web interface &amp; tray application"
-                  Target="[INSTALLFOLDER]PaybyPhoneBuyer.exe"
+                  Name="ParkCheaper"
+                  Description="Launch ParkCheaper web interface &amp; tray application"
+                  Target="[INSTALLFOLDER]ParkCheaper.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   Icon="AppIcon.ico" />
         <RemoveFolder Id="CleanUpShortCut" On="uninstall" />
         <RegistryValue Root="HKCU"
-                       Key="Software\PaybyPhoneBuyer"
+                       Key="Software\ParkCheaper"
                        Name="installed"
                        Type="integer"
                        Value="1"
@@ -71,7 +71,7 @@
     </DirectoryRef>
 
     <!-- Feature definition -->
-    <Feature Id="ProductFeature" Title="PayByPhone Buyer" Level="1">
+    <Feature Id="ProductFeature" Title="ParkCheaper" Level="1">
       <ComponentRef Id="MainExecutable" />
       <ComponentRef Id="ApplicationShortcut" />
     </Feature>

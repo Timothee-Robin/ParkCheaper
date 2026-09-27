@@ -54,10 +54,10 @@ export default function Header({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-semibold tracking-wider text-zinc-100 uppercase">
-              PayByPhone Buyer
+              ParkCheaper
             </span>
             <span className="text-[10px] font-mono text-zinc-600">/</span>
-            <span className="text-[11px] font-mono text-zinc-500">v1.1</span>
+            <span className="text-[11px] font-mono text-zinc-500">v1.2</span>
           </div>
 
           <div className="flex items-center gap-1.5 pl-3 border-l border-zinc-800 text-[11px] font-mono">

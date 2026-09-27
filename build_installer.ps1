@@ -1,11 +1,11 @@
 # ==============================================================================
-# PayByPhone Buyer - Automated Build Script (Frontend, Standalone EXE & MSI)
+# ParkCheaper - Automated Build Script (Frontend, Standalone EXE & MSI)
 # ==============================================================================
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host " PAYBYPHONE BUYER - BUILD SUITE (EXE & MSI)" -ForegroundColor Cyan
+Write-Host " PARKCHEAPER - BUILD SUITE (EXE & MSI)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 1. Build React Frontend
@@ -23,12 +23,12 @@ Write-Host "[+] Frontend built successfully!" -ForegroundColor Green
 
 # 2. Build Standalone Executable with PyInstaller
 Write-Host "`n[*] Step 2/4: Building Standalone Executable (PyInstaller)..." -ForegroundColor Yellow
-pyinstaller --noconfirm PaybyPhoneBuyer.spec
-if (!(Test-Path "dist\PaybyPhoneBuyer.exe")) {
-    Write-Error "PyInstaller build failed: dist\PaybyPhoneBuyer.exe not found."
+pyinstaller --noconfirm ParkCheaper.spec
+if (!(Test-Path "dist\ParkCheaper.exe")) {
+    Write-Error "PyInstaller build failed: dist\ParkCheaper.exe not found."
 }
-$exeSizeMb = [math]::Round((Get-Item "dist\PaybyPhoneBuyer.exe").Length / 1MB, 2)
-Write-Host "[+] Standalone executable built: dist\PaybyPhoneBuyer.exe ($exeSizeMb MB)" -ForegroundColor Green
+$exeSizeMb = [math]::Round((Get-Item "dist\ParkCheaper.exe").Length / 1MB, 2)
+Write-Host "[+] Standalone executable built: dist\ParkCheaper.exe ($exeSizeMb MB)" -ForegroundColor Green
 
 # 3. Locate or Setup WiX Toolset for MSI building
 Write-Host "`n[*] Step 3/4: Locating WiX Toolset for MSI generation..." -ForegroundColor Yellow
@@ -67,7 +67,7 @@ if (-not $candlePath) {
         Write-Host "[+] Portable WiX Toolset ready at $toolsDir" -ForegroundColor Green
     } catch {
         Write-Warning "Could not download WiX binaries: $_"
-        Write-Warning "The standalone executable (dist\PaybyPhoneBuyer.exe) is ready. To compile the MSI locally, install WiX Toolset or run via GitHub Actions."
+        Write-Warning "The standalone executable (dist\ParkCheaper.exe) is ready. To compile the MSI locally, install WiX Toolset or run via GitHub Actions."
     }
 }
 
@@ -78,18 +78,18 @@ if ($candlePath -and (Test-Path $candlePath)) {
     Write-Host "[*] Step 4/4: Compiling Windows MSI Installer..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Force -Path "build" | Out-Null
 
-    & $candlePath -arch x64 -ext WixUIExtension -out "build\PaybyPhoneBuyer.wixobj" "installer\PaybyPhoneBuyer.wxs"
-    & $lightPath -ext WixUIExtension -out "dist\PaybyPhoneBuyer.msi" "build\PaybyPhoneBuyer.wixobj"
+    & $candlePath -arch x64 -ext WixUIExtension -out "build\ParkCheaper.wixobj" "installer\ParkCheaper.wxs"
+    & $lightPath -ext WixUIExtension -out "dist\ParkCheaper.msi" "build\ParkCheaper.wixobj"
 
-    if (Test-Path "dist\PaybyPhoneBuyer.msi") {
-        $msiSizeMb = [math]::Round((Get-Item "dist\PaybyPhoneBuyer.msi").Length / 1MB, 2)
-        Write-Host "[+] Windows MSI Installer created: dist\PaybyPhoneBuyer.msi ($msiSizeMb MB)" -ForegroundColor Green
+    if (Test-Path "dist\ParkCheaper.msi") {
+        $msiSizeMb = [math]::Round((Get-Item "dist\ParkCheaper.msi").Length / 1MB, 2)
+        Write-Host "[+] Windows MSI Installer created: dist\ParkCheaper.msi ($msiSizeMb MB)" -ForegroundColor Green
     }
 }
 
 # 4. Generate Checksums
 $checksumFiles = @()
-foreach ($f in @("dist\PaybyPhoneBuyer.exe", "dist\PaybyPhoneBuyer-cli.exe", "dist\PaybyPhoneBuyer.msi")) {
+foreach ($f in @("dist\ParkCheaper.exe", "dist\ParkCheaper-cli.exe", "dist\ParkCheaper.msi")) {
     if (Test-Path $f) { $checksumFiles += $f }
 }
 if ($checksumFiles.Count -gt 0) {

@@ -17,7 +17,7 @@ def ensure_stdio():
     appdata = os.getenv("APPDATA")
     if appdata:
         try:
-            log_dir = Path(appdata) / "PaybyPhoneBuyer"
+            log_dir = Path(appdata) / "ParkCheaper"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = open(log_dir / "app.log", "a", encoding="utf-8", buffering=1, errors="replace")
         except Exception:

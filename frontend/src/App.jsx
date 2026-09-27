@@ -105,7 +105,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="pt-6 pb-2 border-t border-zinc-900 text-zinc-600 text-[11px] font-mono flex items-center justify-between">
-          <span>PAYBYPHONE BUYER DESK</span>
+          <span>PARKCHEAPER DESK</span>
           <span>FASTAPI + REACT WORKBENCH</span>
         </footer>
 

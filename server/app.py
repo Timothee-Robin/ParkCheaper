@@ -35,6 +35,7 @@ def get_env_paths() -> list[Path]:
     ]
     appdata = os.getenv("APPDATA")
     if appdata:
+        paths.append(Path(appdata) / "ParkCheaper" / ".env")
         paths.append(Path(appdata) / "PaybyPhoneBuyer" / ".env")
     paths.append(Path.home() / ".paybyphone" / ".env")
     return paths
@@ -48,7 +49,7 @@ def load_credentials():
 def save_credentials(phone: str, pswd: str):
     appdata = os.getenv("APPDATA")
     if appdata:
-        target_dir = Path(appdata) / "PaybyPhoneBuyer"
+        target_dir = Path(appdata) / "ParkCheaper"
     else:
         target_dir = Path.cwd()
     try:
@@ -104,8 +105,8 @@ async def lifespan(app: FastAPI):
 # --- Application Setup ---
 
 app = FastAPI(
-    title="PayByPhone Buyer API",
-    description="REST & WebSocket API for PayByPhone parking optimization and automation",
+    title="ParkCheaper API",
+    description="REST & WebSocket API for ParkCheaper parking optimization and automation",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -256,7 +257,8 @@ def calculate_optimization(req: OptimizeRequest, client: Client = Depends(get_cl
             "singleTicketCost": single_ticket_cost,
             "savingsAmount": savings_amount,
             "savingsPercent": savings_percent,
-            "hasPromo": result.get("has_promo", "without_promo" in result)
+            "hasPromo": result.get("has_promo", "without_promo" in result),
+            "isFree": result.get("is_free", False) or (optimized_cost == 0.0 and single_ticket_cost == 0.0)
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Optimization error: {e}")

@@ -1,4 +1,4 @@
-# PayByPhone Smart Buyer 🚗💨
+# ParkCheaper 🚗💨
 
 Outil d'optimisation tarifaire et d'achat automatique séquentiel de stationnement sur **PayByPhone**.
 

@@ -42,22 +42,22 @@ jobs:
 
       - name: Build Standalone Executable (PyInstaller)
         run: |
-          pyinstaller --noconfirm PaybyPhoneBuyer.spec
+          pyinstaller --noconfirm ParkCheaper.spec
 
       - name: Verify Executable CLI
         run: |
-          dist\PaybyPhoneBuyer-cli.exe --help
+          dist\ParkCheaper-cli.exe --help
 
       - name: Build Windows MSI Installer (WiX Toolset)
         run: |
           $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
           New-Item -ItemType Directory -Force -Path build
-          candle.exe -arch x64 -ext WixUIExtension -out build\PaybyPhoneBuyer.wixobj installer\PaybyPhoneBuyer.wxs
-          light.exe -ext WixUIExtension -out dist\PaybyPhoneBuyer.msi build\PaybyPhoneBuyer.wixobj
+          candle.exe -arch x64 -ext WixUIExtension -out build\ParkCheaper.wixobj installer\ParkCheaper.wxs
+          light.exe -ext WixUIExtension -out dist\ParkCheaper.msi build\ParkCheaper.wixobj
 
       - name: Generate Checksums
         run: |
-          Get-FileHash dist\PaybyPhoneBuyer.exe, dist\PaybyPhoneBuyer-cli.exe, dist\PaybyPhoneBuyer.msi -Algorithm SHA256 |
+          Get-FileHash dist\ParkCheaper.exe, dist\ParkCheaper-cli.exe, dist\ParkCheaper.msi -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } |
             Set-Content dist\SHA256SUMS.txt
 
@@ -66,9 +66,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            dist/PaybyPhoneBuyer.msi
-            dist/PaybyPhoneBuyer.exe
-            dist/PaybyPhoneBuyer-cli.exe
+            dist/ParkCheaper.msi
+            dist/ParkCheaper.exe
+            dist/ParkCheaper-cli.exe
             dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
@@ -78,9 +78,9 @@ jobs:
         if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4
         with:
-          name: PaybyPhoneBuyer-Windows-x64
+          name: ParkCheaper-Windows-x64
           path: |
-            dist/PaybyPhoneBuyer.msi
-            dist/PaybyPhoneBuyer.exe
-            dist/PaybyPhoneBuyer-cli.exe
+            dist/ParkCheaper.msi
+            dist/ParkCheaper.exe
+            dist/ParkCheaper-cli.exe
             dist/SHA256SUMS.txt

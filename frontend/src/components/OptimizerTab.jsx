@@ -204,6 +204,18 @@ export default function OptimizerTab({ selectedVehicle, onSchedulerStarted }) {
         {result ? (
           <div className="border border-zinc-800 bg-zinc-900/30 rounded-md overflow-hidden">
             
+            {result.isFree && (
+              <div className="bg-emerald-950/40 border-b border-emerald-800/50 px-4 py-2.5 text-xs font-mono text-emerald-300 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Stationnement gratuit (dimanche, jour férié ou plage horaire non payante).
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700/50">
+                  Gratuit €0.00
+                </span>
+              </div>
+            )}
+
             {/* KPI strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-zinc-800 divide-x divide-zinc-800 text-xs font-mono">
               <div className="p-3.5">
@@ -215,19 +227,19 @@ export default function OptimizerTab({ selectedVehicle, onSchedulerStarted }) {
               <div className="p-3.5">
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Single Ticket Cost</div>
                 <div className="text-zinc-400 mt-1 line-through">
-                  €{(result.singleTicketCost ?? result.standardCost).toFixed(2)}
+                  {result.isFree ? '€0.00 (Gratuit)' : `€${(result.singleTicketCost ?? result.standardCost).toFixed(2)}`}
                 </div>
               </div>
               <div className="p-3.5">
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Optimized Cost</div>
                 <div className="text-emerald-400 font-semibold mt-1">
-                  €{result.totalCost.toFixed(2)}
+                  {result.isFree ? '€0.00 (Gratuit)' : `€${result.totalCost.toFixed(2)}`}
                 </div>
               </div>
               <div className="p-3.5">
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Total Savings</div>
                 <div className="text-emerald-400 font-semibold mt-1">
-                  -€{result.savingsAmount.toFixed(2)} ({result.savingsPercent}%)
+                  {result.isFree ? '100% Gratuit' : `-€${result.savingsAmount.toFixed(2)} (${result.savingsPercent}%)`}
                 </div>
               </div>
             </div>
@@ -265,7 +277,11 @@ export default function OptimizerTab({ selectedVehicle, onSchedulerStarted }) {
                             {dur} min
                           </td>
                           <td className="py-2.5 px-3">
-                            {isPromo ? (
+                            {result.isFree ? (
+                              <span className="text-emerald-400 font-normal">
+                                Gratuit / Free parking (€0.00)
+                              </span>
+                            ) : isPromo ? (
                               <span className="text-emerald-400 font-normal">
                                 Municipal free quota (€0.00)
                               </span>

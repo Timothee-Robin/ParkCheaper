@@ -23,41 +23,46 @@ class ParkingOptimizer:
         if not self.parkingZone.ratePolicyId or self.parkingZone.maxStay == 0:
             self.parkingZone.getRestrictionOnZone()
 
+        max_stay = self.parkingZone.maxStay or 240
+        # Borne maximale à 600 min (10h) pour éviter des centaines de requêtes si maxStay est en jours
+        sampling_limit = min(max_stay, 600)
+
         if durations is None:
             durations = list(
-                range(self.step, self.parkingZone.maxStay + 1, self.step)
+                range(self.step, sampling_limit + 1, self.step)
             )
+            if not durations:
+                durations = [self.step]
 
         for d in durations:
             try:
-                real_dur, cost, promo_dur, promo_usage = (
+                requested_dur, cost, promo_dur, promo_usage = (
                     self.parkingZone.getQuote(d)
                 )
 
                 # Enregistrement du coût brut d'un ticket unique pour cette durée
                 self._single_ticket_quotes[d] = cost
-                if real_dur not in self._single_ticket_quotes:
-                    self._single_ticket_quotes[real_dur] = cost
 
                 if promo_dur > 0 and promo_usage == "Quota":
                     if promo_dur > self.promo_duration:
                         self.promo_duration = promo_dur
 
-                    # Le coût payé correspond à (durée totale - durée promo)
-                    paid_duration = real_dur - promo_dur
-                    if paid_duration > 0:
+                    # Le coût payé correspond à (durée demandée - durée promo)
+                    paid_duration = d - promo_dur
+                    if paid_duration > 0 and cost > 0:
                         if (
                             paid_duration not in self._price_cache
                             or cost < self._price_cache[paid_duration]
                         ):
                             self._price_cache[paid_duration] = cost
                 else:
-                    # Ticket standard sans promotion
-                    if (
-                        real_dur not in self._price_cache
-                        or cost < self._price_cache[real_dur]
-                    ):
-                        self._price_cache[real_dur] = cost
+                    # Ticket standard sans promotion (doit être payant pour être un tarif valide)
+                    if cost > 0:
+                        if (
+                            d not in self._price_cache
+                            or cost < self._price_cache[d]
+                        ):
+                            self._price_cache[d] = cost
 
             except Exception:
                 # Ignore les dépassements de plafonds ou tranches non autorisées
@@ -72,7 +77,11 @@ class ParkingOptimizer:
 
         valid_durations = sorted(self._price_cache.keys(), reverse=True)
         if not valid_durations:
-            raise ValueError("Aucun tarif disponible en cache.")
+            return {
+                "total_cost": 0.0,
+                "tickets": [target_minutes],
+                "covered_minutes": target_minutes,
+            }
 
         search_limit = target_minutes + max(valid_durations)
 
@@ -219,6 +228,26 @@ class ParkingOptimizer:
         # Coût standard pour un seul ticket couvrant la durée cible
         single_cost = self.get_single_ticket_cost(target_minutes)
 
+        # Si le tarif pour cette durée est de 0.0 € (jour gratuit, dimanche, férié, nuit, etc.)
+        if single_cost == 0.0:
+            return {
+                "total_cost": 0.0,
+                "tickets": [target_minutes],
+                "covered_minutes": target_minutes,
+                "single_ticket_cost": 0.0,
+                "has_promo": False,
+                "is_free": True,
+                "without_promo": {
+                    "total_cost": 0.0,
+                    "tickets": [target_minutes],
+                    "covered_minutes": target_minutes,
+                },
+            }
+
+        # Si le cache de prix est vide mais qu'un ticket unique a un coût > 0
+        if not self._price_cache and single_cost > 0:
+            self._price_cache[target_minutes] = single_cost
+
         # Résolution de l'option 100% payante (sans promotion)
         option_paid = self._solve_dp(target_minutes)
 
@@ -266,11 +295,14 @@ class ParkingOptimizer:
             }
             has_promo = self.allow_free_quota_once and self.promo_duration > 0
 
+        is_free = (not has_promo) and (best["total_cost"] == 0.0)
+
         return {
             "total_cost": best["total_cost"],
             "tickets": best["tickets"],
             "covered_minutes": best["covered_minutes"],
             "single_ticket_cost": single_cost,
             "has_promo": has_promo,
+            "is_free": is_free,
             "without_promo": option_paid,
         }
