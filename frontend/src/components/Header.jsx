@@ -11,12 +11,21 @@ export default function Header({
 }) {
   const [showConfig, setShowConfig] = useState(false);
   const [showVehicles, setShowVehicles] = useState(false);
-  const [phone, setPhone] = useState(profile?.phone || '33634182730');
+  const [phone, setPhone] = useState(profile?.phone || '');
   const [pswd, setPswd] = useState('');
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const vehicleDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (profile && profile.connected === false) {
+      setShowConfig(true);
+    }
+    if (profile?.phone) {
+      setPhone(profile.phone);
+    }
+  }, [profile?.connected, profile?.phone]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -203,7 +212,7 @@ export default function Header({
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="33634182730"
+                  placeholder="33612345678 (Phone number)"
                   required
                   className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
                 />

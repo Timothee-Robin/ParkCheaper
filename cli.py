@@ -71,14 +71,46 @@ def load_credentials():
             return
 
 
+def save_credentials(phone: str, pswd: str):
+    appdata = os.getenv("APPDATA")
+    target_dir = Path(appdata) / "ParkCheaper" if appdata else Path.cwd()
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        env_file = target_dir / ".env"
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write(f"phone={phone}\npswd={pswd}\n")
+    except Exception as e:
+        print(f"[!] Warning: Could not persist credentials to {target_dir}: {e}", file=sys.stderr)
+    os.environ["phone"] = phone
+    os.environ["pswd"] = pswd
+
+
 def get_authenticated_client() -> Client:
     load_credentials()
     phone = os.getenv("phone")
     pswd = os.getenv("pswd")
     if not phone or not pswd:
-        print("[!] Error: 'phone' or 'pswd' not found in environment, .env file, or AppData.", file=sys.stderr)
-        print("[*] Tip: You can create a .env file or configure credentials via the web UI at http://localhost:8000", file=sys.stderr)
-        sys.exit(1)
+        if sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            print("=" * 60)
+            print(" PARKCHEAPER - INITIAL SETUP")
+            print(" No credentials found in environment or AppData.")
+            print("=" * 60)
+            try:
+                import getpass
+                entered_phone = input("Enter PayByPhone phone number (e.g. 33612345678): ").strip()
+                entered_pswd = getpass.getpass("Enter PayByPhone password or PIN: ").strip()
+                if entered_phone and entered_pswd:
+                    save_credentials(entered_phone, entered_pswd)
+                    phone = entered_phone
+                    pswd = entered_pswd
+            except (KeyboardInterrupt, EOFError):
+                print("\n[!] Setup cancelled.")
+                sys.exit(1)
+
+        if not phone or not pswd:
+            print("[!] Error: 'phone' or 'pswd' not found in environment, .env file, or AppData.", file=sys.stderr)
+            print("[*] Tip: You can create a .env file or configure credentials via the web UI at http://localhost:8000", file=sys.stderr)
+            sys.exit(1)
 
     account = Account(phone, pswd)
     client = Client()
